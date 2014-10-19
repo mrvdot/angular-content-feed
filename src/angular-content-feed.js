@@ -80,12 +80,26 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
     var provider = contentConfig.provider
       , _current
       , _slice = [].slice
+      , _setDefaults = function (params) {
+        var defs = {
+          limit: contentConfig.pageSize
+        };
+        if (!params) {
+          return defs;
+        }
+        return angular.extend(defs, params);
+      }
       , _digestedFunc = function (fn) {
         if (!fn) {
-          return undefined;
-        };
+          // Still pass through some fn so that digest happens
+          fn = angular.noop;
+        }
         return function () {
-          $timeout(fn);
+          var args = _slice.call(arguments, 0)
+            , that = this;
+          $timeout(function () {
+            fn.apply(that, args);
+          });
         };
       };
     return {
@@ -97,10 +111,8 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
       current: function () {
         return _current;
       },
-      feed: function (pageSize, success, error) {
-        return provider.load({
-          limit: pageSize || contentConfig.pageSize
-        }, _digestedFunc(success), _digestedFunc(error));
+      feed: function (params, success, error) {
+        return provider.load(_setDefaults(params), _digestedFunc(success), _digestedFunc(error));
       }
     }
   })

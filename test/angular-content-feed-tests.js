@@ -76,7 +76,7 @@ describe('Angular Content Feed', function () {
       var result = {id: 123};
       testProvider.get.andReturn(result);
       var returned = content.get('arg1', angular.noop);
-      expect(testProvider.get).toHaveBeenCalledWith('arg1', jasmine.any(Function), undefined);
+      expect(testProvider.get).toHaveBeenCalledWith('arg1', jasmine.any(Function), jasmine.any(Function));
       expect(result).toBe(returned);
       expect(content.current()).toBe(result);
     });
