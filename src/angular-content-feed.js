@@ -16,7 +16,8 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
       properties: {
         id: 'id',
         content: 'content'
-      }
+      },
+      cache: 'contentCache'
     }
     // User specified options
       , options = {}
@@ -53,6 +54,17 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
         config.provider = $injector.get(config.provider)
       };
 
+      if (angular.isString(config.cache)) {
+        if (!$injector.has(config.cache)) {
+          $log.warn('Specified cache "' + config.cache + '" not registered with injector, using noop');
+          config.cache = $injector.get('noopCache');
+        }
+
+        config.cache = $injector.get(config.cache)
+      } else if (!config.cache) {
+        config.cache = $injector.get('noopCache');
+      }
+
       if (config.formatters) {
         for (var i = 0, ii = config.formatters.length; i < ii; i++) {
           var f = config.formatters[i];
@@ -76,8 +88,91 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
 
     return this;
   })
+  // If requested cache doesn't exist, or is set to null
+  // use this for convenience
+  .factory('noopCache', function () {
+    return {
+      setRaw: angular.noop,
+      getRaw: angular.noop,
+      set: angular.noop,
+      get: function (params, loadFn, success, error) {
+        return loadFn(params, success, error);
+      }
+    }
+  })
+  .factory('contentCache', function ($q, $cacheFactory) {
+    var cache = $cacheFactory('contentCache')
+      , promises = {}
+      , resolvePromises = function (hash, result, err) {
+        if (!promises[hash] || !promises[hash].length) {
+          return;
+        }
+        var ps = promises[hash].splice(0, Number.MAX_VALUE);
+        for (var i = 0, ii = ps.length; i < ii; i++) {
+          var p = ps[i];
+          if (result) {
+            p.resolve(result);
+          } else {
+            p.reject(err);
+          }
+        }
+      }
+      , _toHash = function (params) {
+        if (angular.isString(params)) {
+          return params;
+        } else {
+          return angular.toJson(params);
+        }
+      };
+
+    return {
+      setRaw: function (params, result) {
+        var hash = _toHash(params);
+        cache.put(hash, result);
+        return this;
+      },
+      getRaw: function (params) {
+        var hash = _toHash(params);
+        var out = cache.get(hash);
+        return out;
+      },
+      set: function (params, result, err) {
+        var hash = _toHash(params);
+        this.setRaw(hash, result);
+        return this;
+      },
+      // Params to get, and loading fn to use if not in cache
+      // loadingFn should take params as first parameter, then success/error callbacks
+      get: function (params, loadFn, success, error) {
+        var hash = _toHash(params)
+          , result
+          , promise = $q.defer();
+
+        promise.promise.then(success, error);
+        if (!promises[hash]) {
+          promises[hash] = [];
+        };
+        promises[hash].push(promise);
+        if (result = this.getRaw(hash)) {
+          return result;
+        } else {
+          result = loadFn(params,
+            function(response) {
+              resolvePromises(hash, response);
+            },
+            function (err) {
+              resolvePromises(hash, null, err);
+            }
+          );
+          this.set(hash, result);
+          return result;
+        }
+      }
+    };
+  })
   .factory('content', function (contentConfig, $timeout) {
     var provider = contentConfig.provider
+      , cache = contentConfig.cache
       , _current
       , _slice = [].slice
       , _setDefaults = function (params) {
@@ -104,7 +199,23 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
       };
     return {
       get: function (id, success, error) {
-        var result = provider.get(id, _digestedFunc(success), _digestedFunc(error));
+        var result = cache.getRaw(id);
+        if (result) {
+          _current = result;
+          if (success) {
+            _digestedFunc(success)(result);
+          };
+          return result;
+        };
+
+        var loadFn;
+        if (provider.get.bind) {
+          loadFn = provider.get.bind(provider);
+        } else {
+          loadFn = provider.get;
+        }
+
+        result = cache.get(id, loadFn, _digestedFunc(success), _digestedFunc(error));
         _current = result;
         return result;
       },
@@ -112,7 +223,15 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
         return _current;
       },
       feed: function (params, success, error) {
-        return provider.load(_setDefaults(params), _digestedFunc(success), _digestedFunc(error));
+        var params = _setDefaults(params)
+          , result = cache.getRaw(params);
+        if (result) {
+          if (success) {
+            _digestedFunc(success)(result);
+          };
+          return result;
+        };
+        return cache.get(params, provider.load.bind(provider), _digestedFunc(success), _digestedFunc(error));
       }
     }
   })
