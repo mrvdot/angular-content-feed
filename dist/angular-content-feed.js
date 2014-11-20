@@ -5,6 +5,7 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
   .provider('contentConfig', function () {
     // Config Defaults
     var defaults = {
+      // What content provider to use. Must be set before initializing content factory
       provider: null,
       // How many items to load per page
       pageSize: 10,
@@ -17,7 +18,12 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
         id: 'id',
         content: 'content'
       },
-      cache: 'contentCache'
+      // What cache provider to use. Can be function or factory. Default is usually fine
+      cache: 'contentCache',
+      // How many unread articles should be left before trying to lazy-load new content?
+      // Set to false to disable lazy-loading
+      // Note, if 'feed' is never called, lazy-loading will never run (to prevent trying to load 'next' article on a standalone page)
+      unreadBuffer: 2
     }
     // User specified options
       , options = {}
@@ -175,6 +181,13 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
       , cache = contentConfig.cache
       , _current
       , _slice = [].slice
+      // Various events other parts of the app can subscribe to
+      , _listeners = {
+        // load: [], // New content is loaded (not from cache) | args: 
+        // atEnd: [], // Current is last item in feed (if lazy loading, not called unless no more items returned) | args: lastItem
+        // atStart: [], // Current is first item in feed | args: firstItem
+        currentSet: [] // An item is set as current | args: newCurrent, previousCurrent
+      }
       , _setDefaults = function (params) {
         var defs = {
           limit: contentConfig.pageSize
@@ -183,6 +196,33 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
           return defs;
         }
         return angular.extend(defs, params);
+      }
+      , _updateCurrent = function (item) {
+        var last = _current;
+        _current = item;
+        _notifyListeners('currentSet', item, last);
+      }
+      , _notifyListeners = function (event/*, args... */) {
+        var cbs = _listeners[event];
+        if (!cbs || !cbs.length) {
+          return;
+        }
+        var args = [].splice.call(arguments, 1);
+        for (var i = 0, ii = cbs.length; i < ii; i++) {
+          $timeout((function (cb) {
+            return function () {
+              cb.apply(null, args);
+            };
+          })(cbs[i]));
+        }
+      }
+      , _loadingFeed = function () {
+        if (!angular.isNumber(contentConfig.unreadBuffer)) {
+          return;
+        }
+        methods.on('currentSet', function (current, last) {
+          // check index, confirm this is later than last, and if within buffer, fire lazy load
+        });
       }
       , _digestedFunc = function (fn) {
         if (!fn) {
@@ -197,11 +237,13 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
           });
         };
       };
-    return {
+    
+    var methods = {
+      // Get a content item by id, with optional success/error callbacks
       get: function (id, success, error) {
         var result = cache.getRaw(id);
         if (result) {
-          _current = result;
+          _updateCurrent(result);
           if (success) {
             _digestedFunc(success)(result);
           };
@@ -216,12 +258,20 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
         }
 
         result = cache.get(id, loadFn, _digestedFunc(success), _digestedFunc(error));
-        _current = result;
+        _updateCurrent(result);
         return result;
       },
-      current: function () {
+      // Get the current item
+      // or optionally set the current item (pass null to clear it)
+      current: function (item) {
+        if (typeof(item) !== 'undefined') {
+          _updateCurrent(item);
+          return this;
+        };
         return _current;
       },
+      // Get a feed (array) of content items, based on filter params
+      // Params are passed directly through to provider load function
       feed: function (params, success, error) {
         var params = _setDefaults(params)
           , result = cache.getRaw(params);
@@ -231,9 +281,20 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
           };
           return result;
         };
+        _loadingFeed();
         return cache.get(params, provider.load.bind(provider), _digestedFunc(success), _digestedFunc(error));
+      },
+      on: function (event, fn) {
+        if (!_listeners[event]) {
+          // Warn about non-existent event
+          _listeners[event] = [];
+        };
+        _listeners[event].push(fn);
+        return this;
       }
-    }
+    };
+
+    return methods;
   }])
   .directive('content', ['content', function (content) {
     return {
@@ -247,8 +308,9 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
     return {
       scope: true,
       link: function ($scope, $element, $attrs) {
+        var _formatContent = angular.identity;
         if (contentConfig.formatters.length) {
-          var _formatContent = function (content) {
+          _formatContent = function (content) {
             if (!content) {
               return content;
             };
@@ -262,11 +324,11 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
             }
             return content;
           };
-
-          $scope.$watch($attrs.contentElement + '.' + contentConfig.properties.content, function (nv) {
-            $scope.$formattedContent = _formatContent(nv);
-          });
         };
+
+        $scope.$watch($attrs.contentElement + '.' + contentConfig.properties.content, function (nv) {
+          $scope.$formattedContent = _formatContent(nv);
+        });
       }
     }
   }])
