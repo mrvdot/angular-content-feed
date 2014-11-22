@@ -9,7 +9,14 @@ describe('Angular Content Feed', function () {
         $provide.factory('testProvider', function () { 
           return testProvider;
         });
-      })
+
+        $provide.decorator('$timeout', function () {
+          return function (fn) {
+            console.log('calling', fn);
+            fn();
+          }
+        })
+      });
     });
 
     it('should throw error when no provider is set', function () {
@@ -74,11 +81,17 @@ describe('Angular Content Feed', function () {
 
     it('should pass through calls to get and set result as current', function () {
       var result = {id: 123};
-      testProvider.get.andReturn(result);
+      testProvider.get.andCallFake(function(params, fn) {
+        fn(result);
+        return result;
+      });
       var returned = content.get('arg1', angular.noop);
       expect(testProvider.get).toHaveBeenCalledWith('arg1', jasmine.any(Function), jasmine.any(Function));
       expect(result).toBe(returned);
-      expect(content.current()).toBe(result);
+      // Because this happens via a promise, give it a moment
+      setTimeout(function () {
+        expect(content.current()).toBe(result);
+      }, 5);
     });
   });
 

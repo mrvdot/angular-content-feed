@@ -155,13 +155,14 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
           , promise = $q.defer();
 
         promise.promise.then(success, error);
-        if (!promises[hash]) {
-          promises[hash] = [];
-        };
-        promises[hash].push(promise);
         if (result = this.getRaw(hash)) {
+          promise.resolve(result);
           return result;
         } else {
+          if (!promises[hash]) {
+            promises[hash] = [];
+          };
+          promises[hash].push(promise);
           result = loadFn(params,
             function(response) {
               resolvePromises(hash, response);
@@ -198,6 +199,9 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
         return angular.extend(defs, params);
       }
       , _updateCurrent = function (item) {
+        if (item === _current) {
+          return;
+        };
         var last = _current;
         _current = item;
         _notifyListeners('currentSet', item, last);
@@ -257,8 +261,15 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
           loadFn = provider.get;
         }
 
-        result = cache.get(id, loadFn, _digestedFunc(success), _digestedFunc(error));
-        _updateCurrent(result);
+        result = cache.get(
+          id,
+          loadFn,
+          function (response) {
+            _updateCurrent(result);
+            _digestedFunc(success);
+          },
+          _digestedFunc(error)
+        );
         return result;
       },
       // Get the current item
