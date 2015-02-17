@@ -198,8 +198,8 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
         }
         return angular.extend(defs, params);
       }
-      , _updateCurrent = function (item) {
-        if (item === _current) {
+      , _updateCurrent = function (item, force) {
+        if (!force && (item === _current)) {
           return;
         };
         var last = _current;
@@ -247,7 +247,7 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
       get: function (id, success, error) {
         var result = cache.getRaw(id);
         if (result) {
-          _updateCurrent(result);
+          _updateCurrent(result, true);
           if (success) {
             _digestedFunc(success)(result);
           };
@@ -265,7 +265,7 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
           id,
           loadFn,
           function (response) {
-            _updateCurrent(result);
+            _updateCurrent(result, true);
             _digestedFunc(success);
           },
           _digestedFunc(error)
