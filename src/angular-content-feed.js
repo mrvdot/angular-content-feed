@@ -184,7 +184,7 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
       , _slice = [].slice
       // Various events other parts of the app can subscribe to
       , _listeners = {
-        // load: [], // New content is loaded (not from cache) | args: 
+        // load: [], // New content is loaded (not from cache) | args:
         // atEnd: [], // Current is last item in feed (if lazy loading, not called unless no more items returned) | args: lastItem
         // atStart: [], // Current is first item in feed | args: firstItem
         currentSet: [] // An item is set as current | args: newCurrent, previousCurrent
@@ -241,7 +241,7 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
           });
         };
       };
-    
+
     var methods = {
       // Get a content item by id, with optional success/error callbacks
       get: function (id, success, error) {
@@ -307,7 +307,7 @@ angular.module('mvd.contentFeed', ['ngSanitize'])
 
     return methods;
   })
-  .directive('content', function (content) {
+  .directive('contentWrapper', function (content) {
     return {
       scope: true,
       link: function ($scope, $element, $attrs) {

@@ -6,7 +6,7 @@ describe('Angular Content Feed', function () {
       module('mvd.contentFeed');
 
       module(function ($provide) {
-        $provide.factory('testProvider', function () { 
+        $provide.factory('testProvider', function () {
           return testProvider;
         });
 
@@ -101,7 +101,7 @@ describe('Angular Content Feed', function () {
       , element
       , formatter
       , tpl = [
-        '<div content>',
+        '<div content-wrapper>',
         '  <div ng-repeat="element in feed" content-element="element">',
         '    <p>{{element.title}}</p>',
         '    <div ng-bind-html="$formattedContent"></div>',
