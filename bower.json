@@ -2,7 +2,7 @@
   "name": "angular-content-feed",
   "description": "Content feed module for angular",
   "main": "dist/angular-content-feed.js",
-  "version": "0.0.4",
+  "version": "1.0.0",
   "dependencies": {
     "angular": "~1.4.0",
     "angular-sanitize": "~1.4.0"
